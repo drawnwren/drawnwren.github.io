@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title></title>
+    
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <meta name="robots" content="noodp"/>
+
+    <link rel="stylesheet" href="https://drawnwren.github.io/style.css">
+    <link rel="stylesheet" href="https://drawnwren.github.io/color/blue.css">
+
+    <link rel="stylesheet" href="https://drawnwren.github.io/font-hack-subset.css">
+
+    </head>
+
+<body class="">
+<div class="container">
+    
+    <header class="header">
+        <div class="header__inner">
+            <div class="header__logo">
+                    
+                <a href="https://drawnwren.github.io" style="text-decoration: none;">
+                    <div class="logo">
+                      
+                            Terminimal theme
+                        
+                    </div>
+                </a>
+            </div>
+        </div>
+
+        
+        
+        
+    </header>
+    
+
+    <div class="content">
+        
+    <div class="post">
+        
+    <h1 class="post-title"><a href="https://drawnwren.github.io/blog/in-memory-filesystem/">the perils of the in memory filesystem</a></h1>
+    <div class="post-meta-inline">
+        
+    <span class="post-date"></span>
+
+    </div>
+
+    
+
+        
+        <div class="post-content">
+            <h2 id="problem-specification">Problem Specification</h2>
+<p>An extremely common interview question is the &quot;in memory filesystem&quot;,</p>
+<p>Here is an example prompt that I received in the past: </p>
+<blockquote>
+<p>Design an in-memory file system class, which supports these operations:</p>
+<p>ls : takes as a parameter a string. If the string is a file path, return the file name. If the string is a directory path, return a list of file &amp; child directory names in the directory.</p>
+<p>mkdir: takes a path, and creates a directory at it if it does not already exist. Intermediate directories that don’t exist should also be created.</p>
+<p>addContentsToFile: Given a file path &amp; file content (string), if the file exists then append to its content, otherwise create a new file and store the contents there.</p>
+<p>getContentsFromFile: Given a file path, return file contents in string format.</p>
+</blockquote>
+<p>and here is the <a href="https://leetcode.com/problems/design-in-memory-file-system/description/">relevant LeetCode problem</a>.</p>
+<p>The first thing we notice is that there a few subtleties which make these
+prompts different. We'll explore these subtleties by exploring a python
+solution to the leetcode problem and translating it to rust. </p>
+<h2 id="basic-python-implementation">Basic Python Implementation</h2>
+<p>Generally, interviewers expect you to write something like this in python and
+produce code that looks like the following:</p>
+<pre data-lang="python" style="background-color:#2b303b;color:#c0c5ce;" class="language-python "><code class="language-python" data-lang="python"><span style="color:#b48ead;">from </span><span>collections </span><span style="color:#b48ead;">import </span><span>defaultdict
+</span><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">Node</span><span style="color:#eff1f5;">:
+</span><span>    </span><span style="color:#b48ead;">def </span><span style="color:#96b5b4;">__init__</span><span>(</span><span style="color:#bf616a;">self</span><span>):
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.child=</span><span style="color:#bf616a;">defaultdict</span><span>(Node)
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.content=&quot;&quot;
+</span><span>        
+</span><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">FileSystem</span><span style="color:#eff1f5;">(</span><span style="color:#a3be8c;">object</span><span style="color:#eff1f5;">):
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">def </span><span style="color:#96b5b4;">__init__</span><span>(</span><span style="color:#bf616a;">self</span><span>):
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.root=</span><span style="color:#bf616a;">Node</span><span>()
+</span><span>        
+</span><span>    </span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">find</span><span>(</span><span style="color:#bf616a;">self</span><span>,</span><span style="color:#bf616a;">path</span><span>):</span><span style="color:#65737e;">#find and return node at path.
+</span><span>        curr=</span><span style="color:#bf616a;">self</span><span>.root
+</span><span>        </span><span style="color:#b48ead;">if </span><span style="color:#96b5b4;">len</span><span>(path)==</span><span style="color:#d08770;">1</span><span>:
+</span><span>            </span><span style="color:#b48ead;">return </span><span style="color:#bf616a;">self</span><span>.root
+</span><span>        </span><span style="color:#b48ead;">for </span><span>word </span><span style="color:#b48ead;">in </span><span>path.</span><span style="color:#bf616a;">split</span><span>(&quot;</span><span style="color:#a3be8c;">/</span><span>&quot;)[</span><span style="color:#d08770;">1</span><span>:]:
+</span><span>            curr=curr.child[word]
+</span><span>        </span><span style="color:#b48ead;">return </span><span>curr
+</span><span>        
+</span><span>    </span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">ls</span><span>(</span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>):
+</span><span>        curr=</span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#bf616a;">find</span><span>(path)
+</span><span>        </span><span style="color:#b48ead;">if </span><span>curr.content:</span><span style="color:#65737e;">#file path,return file name
+</span><span>            </span><span style="color:#b48ead;">return </span><span>[path.</span><span style="color:#bf616a;">split</span><span>(&#39;</span><span style="color:#a3be8c;">/</span><span>&#39;)[-</span><span style="color:#d08770;">1</span><span>]]
+</span><span>        </span><span style="color:#b48ead;">return </span><span style="color:#96b5b4;">sorted</span><span>(curr.child.</span><span style="color:#bf616a;">keys</span><span>())
+</span><span>		
+</span><span>    </span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">mkdir</span><span>(</span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>):
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#bf616a;">find</span><span>(path)
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">addContentToFile</span><span>(</span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">filePath</span><span>, </span><span style="color:#bf616a;">content</span><span>):
+</span><span>        curr=</span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#bf616a;">find</span><span>(filePath)
+</span><span>        curr.content+=content
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">readContentFromFile</span><span>(</span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">filePath</span><span>):
+</span><span>        curr=</span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#bf616a;">find</span><span>(filePath)
+</span><span>        </span><span style="color:#b48ead;">return </span><span>curr.content
+</span></code></pre>
+<h1 id="node">Node</h1>
+<p>So, let's suppose we want to do something similar and translate this code into
+Rust.</p>
+<p>We start with the <code>Node</code> class. A direct translation would look something like
+the following.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">use </span><span>std::collections::HashMap;
+</span><span style="color:#b48ead;">struct </span><span>Node {
+</span><span>    </span><span style="color:#bf616a;">child</span><span>: HashMap&lt;String,Node&gt;,
+</span><span>    </span><span style="color:#bf616a;">content</span><span>: String
+</span><span>
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>Node {
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">new</span><span>() -&gt; </span><span style="color:#b48ead;">Self </span><span>{
+</span><span>        </span><span style="color:#b48ead;">Self </span><span>{
+</span><span>            child: HashMap::new(),
+</span><span>            content: &quot;&quot;.</span><span style="color:#96b5b4;">to_string</span><span>()
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>Immediately, we run into our first problem. Rust doesn't allow recursive data
+types like this because there's no way to know the size of <code>Node</code> at compile
+time. Luckily, that's pretty straightforward. We can just fix that by inserting
+a <code>Box</code>.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">use </span><span>std::collections::HashMap;
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Node {
+</span><span>    </span><span style="color:#bf616a;">child</span><span>: HashMap&lt;String,Box&lt;Node&gt;&gt;,
+</span><span>    </span><span style="color:#bf616a;">content</span><span>: String
+</span><span>
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>Node {
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">new</span><span>() -&gt; </span><span style="color:#b48ead;">Self </span><span>{
+</span><span>        </span><span style="color:#b48ead;">Self </span><span>{
+</span><span>            child: Box::new(HashMap::new()),
+</span><span>            content: &quot;&quot;.</span><span style="color:#96b5b4;">to_string</span><span>()
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>This is only a slight change. Now, <code>child</code> contains a <code>HashMap</code> which contains
+a <code>Box</code>. The <code>Node</code>s while be stored on the heap, and this change will flow
+through to create a bit more complexity later.</p>
+<h2 id="filesystem-class">FileSystem class</h2>
+<p>Let's continue to look at the <code>FileSystem</code> class.</p>
+<pre data-lang="python" style="background-color:#2b303b;color:#c0c5ce;" class="language-python "><code class="language-python" data-lang="python"><span style="color:#b48ead;">class </span><span style="color:#ebcb8b;">FileSystem</span><span style="color:#eff1f5;">(</span><span style="color:#a3be8c;">object</span><span style="color:#eff1f5;">):
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">def </span><span style="color:#96b5b4;">__init__</span><span>(</span><span style="color:#bf616a;">self</span><span>):
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.root=</span><span style="color:#bf616a;">Node</span><span>()
+</span><span>
+</span><span>    </span><span style="color:#d08770;">...
+</span><span>        
+</span></code></pre>
+<p>becomes,</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">struct </span><span>FileSystem {
+</span><span>    </span><span style="color:#bf616a;">root</span><span>: Node
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>FileSystem {
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">new</span><span>() -&gt; </span><span style="color:#b48ead;">Self</span><span>{
+</span><span>        </span><span style="color:#b48ead;">Self </span><span>{
+</span><span>            root: Node::new()
+</span><span>        }
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>And this is probably the simplest conversion of the whole post.</p>
+<h3 id="find">Find</h3>
+<pre data-lang="python" style="background-color:#2b303b;color:#c0c5ce;" class="language-python "><code class="language-python" data-lang="python"><span>    </span><span style="color:#b48ead;">def </span><span style="color:#8fa1b3;">find</span><span>(</span><span style="color:#bf616a;">self</span><span>,</span><span style="color:#bf616a;">path</span><span>):</span><span style="color:#65737e;">#find and return node at path.
+</span><span>        curr=</span><span style="color:#bf616a;">self</span><span>.root
+</span><span>        </span><span style="color:#b48ead;">if </span><span style="color:#96b5b4;">len</span><span>(path)==</span><span style="color:#d08770;">1</span><span>:
+</span><span>            </span><span style="color:#b48ead;">return </span><span style="color:#bf616a;">self</span><span>.root
+</span><span>        </span><span style="color:#b48ead;">for </span><span>word </span><span style="color:#b48ead;">in </span><span>path.</span><span style="color:#bf616a;">split</span><span>(&quot;</span><span style="color:#a3be8c;">/</span><span>&quot;)[</span><span style="color:#d08770;">1</span><span>:]:
+</span><span>            curr=curr.child[word]
+</span><span>        </span><span style="color:#b48ead;">return </span><span>curr
+</span></code></pre>
+<p>This is where things start to get tricky. We'll come back to this
+implementation a few times.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">impl </span><span>FileSystem {
+</span><span>       </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">find</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String) -&gt; &amp;</span><span style="color:#b48ead;">mut</span><span> Node {
+</span><span>            </span><span style="color:#b48ead;">let mut</span><span> curr = &amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>.root; </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            </span><span style="color:#b48ead;">if</span><span> path.</span><span style="color:#96b5b4;">len</span><span>() == </span><span style="color:#d08770;">1 </span><span>{
+</span><span>                </span><span style="color:#b48ead;">return </span><span>&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>.root </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            }
+</span><span>            </span><span style="color:#b48ead;">for</span><span> word in path.</span><span style="color:#96b5b4;">split</span><span>(&quot;</span><span style="color:#a3be8c;">/</span><span>&quot;) {
+</span><span>                </span><span style="color:#b48ead;">if let </span><span>Some(result) = curr.child.</span><span style="color:#96b5b4;">get</span><span>(word) {
+</span><span>                    curr = result.</span><span style="color:#96b5b4;">as_mut</span><span>(); </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>                }
+</span><span>            }
+</span><span>            </span><span style="color:#b48ead;">return</span><span> curr
+</span><span>       }
+</span><span>}
+</span></code></pre>
+<h3 id="mkdir">Mkdir</h3>
+<p>Now, let's look at mkdir. The python version relies on the behavior of
+defaultdict to insert unfound paths.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">impl </span><span>FileSystem {
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">mkdir</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String) {
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">find</span><span>(path);
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>Let's go back and update <code>find</code> so that it uses the <code>entry</code> api to get the same
+behavior.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">impl </span><span>FileSystem {
+</span><span>       </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">find</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String) -&gt; &amp;</span><span style="color:#b48ead;">mut</span><span> Node {
+</span><span>            </span><span style="color:#65737e;">// we need to move the path check first to avoid a double borrow
+</span><span>            </span><span style="color:#b48ead;">if</span><span> path.</span><span style="color:#96b5b4;">len</span><span>() == </span><span style="color:#d08770;">1 </span><span>{
+</span><span>                </span><span style="color:#b48ead;">return </span><span>&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>.root </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            }
+</span><span>
+</span><span>            </span><span style="color:#b48ead;">let mut</span><span> curr = &amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>.root; </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            
+</span><span>            </span><span style="color:#65737e;">// advance the iterator once to get past the first null split
+</span><span>            </span><span style="color:#b48ead;">for</span><span> word in path.</span><span style="color:#96b5b4;">split</span><span>(&quot;</span><span style="color:#a3be8c;">/</span><span>&quot;).</span><span style="color:#96b5b4;">skip</span><span>(</span><span style="color:#d08770;">1</span><span>) {
+</span><span>                curr = curr.child.</span><span style="color:#96b5b4;">entry</span><span>(word).</span><span style="color:#96b5b4;">or_insert</span><span>(Box::new(Node::new())); </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            }
+</span><span>            </span><span style="color:#b48ead;">return</span><span> curr
+</span><span>       }
+</span><span>}
+</span></code></pre>
+<p>That makes the rest of the implementation flow fairly straightforwardly, </p>
+<h2 id="the-rest">The rest</h2>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">impl </span><span>FileSystem {
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">ls</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String) -&gt; Vec&lt;String&gt; {
+</span><span>        </span><span style="color:#b48ead;">let</span><span> curr = </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">find</span><span>(path);
+</span><span>        </span><span style="color:#b48ead;">if</span><span> curr.content != &quot;&quot; {
+</span><span>            </span><span style="color:#b48ead;">return </span><span>vec![path.</span><span style="color:#96b5b4;">split</span><span>(&quot;</span><span style="color:#a3be8c;">/</span><span>&quot;).</span><span style="color:#96b5b4;">last</span><span>().</span><span style="color:#96b5b4;">unwrap</span><span>()]
+</span><span>        }
+</span><span>        </span><span style="color:#b48ead;">let mut</span><span> ans = curr.child.</span><span style="color:#96b5b4;">keys</span><span>().</span><span style="color:#96b5b4;">collect</span><span>();
+</span><span>        ans.</span><span style="color:#96b5b4;">sort</span><span>();
+</span><span>        ans
+</span><span>    }
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">add_content_to_file</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String, </span><span style="color:#bf616a;">content</span><span>: String) {
+</span><span>        </span><span style="color:#b48ead;">let</span><span> curr = </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">find</span><span>(path);
+</span><span>        curr.is_file = </span><span style="color:#d08770;">true</span><span>;
+</span><span>        curr.content.</span><span style="color:#96b5b4;">push_str</span><span>(&amp;content);
+</span><span>    }
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">read_content_from_file</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String) -&gt; String {
+</span><span>        </span><span style="color:#b48ead;">let</span><span> curr = </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">find</span><span>(path);
+</span><span>        curr.content
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<h2 id="uh-oh">Uh-oh</h2>
+<p>But wait, now whenever we call <code>FileSystem::ls(path)</code> we allocate the memory
+for a directory structure. This makes the following test fail, </p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>    </span><span style="color:#b48ead;">let mut</span><span> fs = FileSystem::new();
+</span><span>    fs.</span><span style="color:#96b5b4;">ls</span><span>(&quot;</span><span style="color:#a3be8c;">/a/b/c</span><span>&quot;);
+</span><span>    fs.</span><span style="color:#96b5b4;">ls</span><span>(&quot;</span><span style="color:#a3be8c;">/a</span><span>&quot;) </span><span style="color:#65737e;">// =&gt; outputs &quot;b&quot;
+</span></code></pre>
+<p>The solution also doesn't allow for the existence of files with empty strings,</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>    </span><span style="color:#b48ead;">let mut</span><span> fs = FileSystem::new();
+</span><span>    fs.</span><span style="color:#96b5b4;">add_content_to_file</span><span>(&quot;</span><span style="color:#a3be8c;">/a/b/c</span><span>&quot;,&quot;&quot;);
+</span><span>    fs.</span><span style="color:#96b5b4;">ls</span><span>(&quot;</span><span style="color:#a3be8c;">/a/b/c</span><span>&quot;); </span><span style="color:#65737e;">// =&gt; outputs &quot;&quot; instead of &quot;c&quot;
+</span></code></pre>
+<p>Both of these can be solved with relative ease by introducing a flag on <code>Node</code>, </p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">use </span><span>std::collections::HashMap;
+</span><span style="color:#b48ead;">struct </span><span>Node {
+</span><span>    </span><span style="color:#bf616a;">child</span><span>: HashMap&lt;String,Node&gt;,
+</span><span>    </span><span style="color:#bf616a;">content</span><span>: String,
+</span><span>    </span><span style="color:#bf616a;">is_file</span><span>: false
+</span><span>}
+</span></code></pre>
+<p>And then handling the flag in <code>add_content_to_file</code> and <code>ls</code>.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">impl </span><span>FileSystem {
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">add_content_to_file</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String, </span><span style="color:#bf616a;">content</span><span>: String) {
+</span><span>        </span><span style="color:#b48ead;">let</span><span> curr = </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">find</span><span>(path);
+</span><span>        curr.is_file = </span><span style="color:#d08770;">true</span><span>;
+</span><span>        curr.content.</span><span style="color:#96b5b4;">push_str</span><span>(&amp;content);
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">ls</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String) -&gt; Vec&lt;String&gt; {
+</span><span>        </span><span style="color:#b48ead;">let</span><span> curr = </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">find</span><span>(path);
+</span><span>        </span><span style="color:#b48ead;">if</span><span> curr.is_file {
+</span><span>            </span><span style="color:#b48ead;">return </span><span>vec![path.</span><span style="color:#96b5b4;">split</span><span>(&quot;</span><span style="color:#a3be8c;">/</span><span>&quot;).</span><span style="color:#96b5b4;">last</span><span>().</span><span style="color:#96b5b4;">unwrap</span><span>()]
+</span><span>        }
+</span><span>        </span><span style="color:#b48ead;">let mut</span><span> ans = curr.child.</span><span style="color:#96b5b4;">keys</span><span>().</span><span style="color:#96b5b4;">collect</span><span>();
+</span><span>        ans.</span><span style="color:#96b5b4;">sort</span><span>();
+</span><span>        ans
+</span><span>    }
+</span><span>}
+</span></code></pre>
+<p>Now, let's look at <code>find</code></p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">impl </span><span>FileSystem {
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">find</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String) -&gt; &amp;</span><span style="color:#b48ead;">mut</span><span> Node {
+</span><span>            </span><span style="color:#65737e;">// we need to move the path check first to avoid a double borrow
+</span><span>            </span><span style="color:#b48ead;">if</span><span> path.</span><span style="color:#96b5b4;">len</span><span>() == </span><span style="color:#d08770;">1 </span><span>{
+</span><span>                </span><span style="color:#b48ead;">return </span><span>&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>.root </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            }
+</span><span>
+</span><span>            </span><span style="color:#b48ead;">let mut</span><span> curr = &amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>.root; </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            
+</span><span>            </span><span style="color:#65737e;">// advance the iterator once to get past the first null split
+</span><span>            </span><span style="color:#b48ead;">for</span><span> word in path.</span><span style="color:#96b5b4;">split</span><span>(&quot;</span><span style="color:#a3be8c;">/</span><span>&quot;).</span><span style="color:#96b5b4;">skip</span><span>(</span><span style="color:#d08770;">1</span><span>) {
+</span><span>                curr = curr.child.</span><span style="color:#96b5b4;">entry</span><span>(word).</span><span style="color:#96b5b4;">or_insert</span><span>(Box::new(Node::new())); </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            }
+</span><span>            </span><span style="color:#b48ead;">return</span><span> curr
+</span><span>       }
+</span><span>}
+</span></code></pre>
+<p>What we actually want to do here is abstract out the <code>curr</code> update.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">find</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String, </span><span style="color:#bf616a;">f</span><span>: ????) -&gt; &amp;</span><span style="color:#b48ead;">mut</span><span> Node {
+</span><span>            </span><span style="color:#65737e;">// we need to move the path check first to avoid a double borrow
+</span><span>            </span><span style="color:#b48ead;">if</span><span> path.</span><span style="color:#96b5b4;">len</span><span>() == </span><span style="color:#d08770;">1 </span><span>{
+</span><span>                </span><span style="color:#b48ead;">return </span><span>&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>.root </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            }
+</span><span>
+</span><span>            </span><span style="color:#b48ead;">let mut</span><span> curr = &amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>.root; </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            
+</span><span>            </span><span style="color:#65737e;">// advance the iterator once to get past the first null split
+</span><span>            </span><span style="color:#b48ead;">for</span><span> word in path.</span><span style="color:#96b5b4;">split</span><span>(&quot;</span><span style="color:#a3be8c;">/</span><span>&quot;).</span><span style="color:#96b5b4;">skip</span><span>(</span><span style="color:#d08770;">1</span><span>) {
+</span><span>                </span><span style="color:#65737e;">//curr.child.entry(word).or_insert(Box::new(Node::new()))
+</span><span>                curr = </span><span style="color:#96b5b4;">f</span><span>(word); </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            }
+</span><span>            </span><span style="color:#b48ead;">return</span><span> curr
+</span><span>       }
+</span><span>
+</span><span>
+</span></code></pre>
+<p>We want <code>f</code>'s type to be <code>|curr: &amp;mut Node, word: String| -&gt; &amp;mut Node</code>, but
+that really begs the question -- does passing a function as a parameter make
+sense here? We've just defined the function signature of what really just looks
+like a method to me. So, let's try implementing <code>create</code> and <code>find</code> on the node
+itself.</p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">impl </span><span>Node {
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">new</span><span>() -&gt; </span><span style="color:#b48ead;">Self </span><span>{
+</span><span>        </span><span style="color:#b48ead;">Self </span><span>{
+</span><span>            child: HashMap::new(),
+</span><span>            content: String::new()
+</span><span>        }
+</span><span>    }
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">create</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">name</span><span>: &amp;</span><span style="color:#b48ead;">str</span><span>) -&gt; &amp;</span><span style="color:#b48ead;">mut</span><span> Node {
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.child.</span><span style="color:#96b5b4;">entry</span><span>(name.</span><span style="color:#96b5b4;">to_string</span><span>()).</span><span style="color:#96b5b4;">or_insert_with</span><span>(|| Box::new(Node::new())).</span><span style="color:#96b5b4;">as_mut</span><span>()
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">find</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">name</span><span>: &amp;</span><span style="color:#b48ead;">str</span><span>) -&gt; &amp;</span><span style="color:#b48ead;">mut</span><span> Node {
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.child.</span><span style="color:#96b5b4;">get_mut</span><span>(name).</span><span style="color:#96b5b4;">unwrap</span><span>()
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span>}
+</span><span style="color:#b48ead;">impl </span><span>FileSystem {
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">find</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String, </span><span style="color:#bf616a;">create</span><span>: </span><span style="color:#b48ead;">bool</span><span>) -&gt; &amp;</span><span style="color:#b48ead;">mut</span><span> Node {
+</span><span>            </span><span style="color:#65737e;">// we need to move the path check first to avoid a double borrow
+</span><span>            </span><span style="color:#b48ead;">if</span><span> path.</span><span style="color:#96b5b4;">len</span><span>() == </span><span style="color:#d08770;">1 </span><span>{
+</span><span>                </span><span style="color:#b48ead;">return </span><span>&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>.root </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            }
+</span><span>
+</span><span>            </span><span style="color:#b48ead;">let mut</span><span> curr = &amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>.root; </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            
+</span><span>            </span><span style="color:#65737e;">// advance the iterator once to get past the first null split
+</span><span>            </span><span style="color:#b48ead;">for</span><span> word in path.</span><span style="color:#96b5b4;">split</span><span>(&quot;</span><span style="color:#a3be8c;">/</span><span>&quot;).</span><span style="color:#96b5b4;">skip</span><span>(</span><span style="color:#d08770;">1</span><span>) {
+</span><span>                </span><span style="color:#65737e;">//curr.child.entry(word).or_insert(Box::new(Node::new()))
+</span><span>                curr = </span><span style="color:#b48ead;">match</span><span> create {
+</span><span>                    </span><span style="color:#d08770;">true </span><span>=&gt; curr.</span><span style="color:#96b5b4;">create</span><span>(word),
+</span><span>                    </span><span style="color:#d08770;">false </span><span>=&gt; curr.</span><span style="color:#96b5b4;">find</span><span>(word)
+</span><span>                }; </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            }
+</span><span>            </span><span style="color:#b48ead;">return</span><span> curr
+</span><span>       }
+</span><span>}
+</span></code></pre>
+<p>That works pretty well. But the return type of <code>HashMap::get_mut</code> is <code>Option</code>
+which really highlights another shortcoming of the problem. How should we deal
+with <code>ls /b/cee/d/a</code> when <code>b/cee/</code> doesn't exist? Neither of the original
+prompts address the case. So, our current implementation will just panic
+(thanks to the <code>unwrap</code> call on <code>Node::find</code>).</p>
+<p>Here's what the final rust implementation looks like: </p>
+<pre data-lang="rust" style="background-color:#2b303b;color:#c0c5ce;" class="language-rust "><code class="language-rust" data-lang="rust"><span style="color:#b48ead;">use </span><span>std::collections::HashMap;
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>Node {
+</span><span>    </span><span style="color:#bf616a;">is_file</span><span>: </span><span style="color:#b48ead;">bool</span><span>,
+</span><span>    </span><span style="color:#bf616a;">child</span><span>: HashMap&lt;String,Box&lt;Node&gt;&gt;,
+</span><span>    </span><span style="color:#bf616a;">content</span><span>: String
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>Node {
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">new</span><span>() -&gt; </span><span style="color:#b48ead;">Self </span><span>{
+</span><span>        </span><span style="color:#b48ead;">Self </span><span>{
+</span><span>            child: HashMap::new(),
+</span><span>            content: String::new(),
+</span><span>            is_file: </span><span style="color:#d08770;">false
+</span><span>        }
+</span><span>    }
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">create</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">name</span><span>: &amp;</span><span style="color:#b48ead;">str</span><span>) -&gt; &amp;</span><span style="color:#b48ead;">mut</span><span> Node {
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.child.</span><span style="color:#96b5b4;">entry</span><span>(name.</span><span style="color:#96b5b4;">to_string</span><span>()).</span><span style="color:#96b5b4;">or_insert_with</span><span>(|| Box::new(Node::new())).</span><span style="color:#96b5b4;">as_mut</span><span>()
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">find</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">name</span><span>: &amp;</span><span style="color:#b48ead;">str</span><span>) -&gt; &amp;</span><span style="color:#b48ead;">mut</span><span> Node {
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.child.</span><span style="color:#96b5b4;">get_mut</span><span>(name).</span><span style="color:#96b5b4;">unwrap</span><span>()
+</span><span>    }
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">struct </span><span>FileSystem {
+</span><span>    </span><span style="color:#bf616a;">root</span><span>: Node
+</span><span>}
+</span><span>
+</span><span style="color:#b48ead;">impl </span><span>FileSystem {
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">new</span><span>() -&gt; </span><span style="color:#b48ead;">Self </span><span>{
+</span><span>        </span><span style="color:#b48ead;">Self </span><span>{
+</span><span>            root: Node::new()
+</span><span>        }
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">find</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String, </span><span style="color:#bf616a;">create</span><span>: </span><span style="color:#b48ead;">bool</span><span>) -&gt; &amp;</span><span style="color:#b48ead;">mut</span><span> Node {
+</span><span>            </span><span style="color:#b48ead;">if</span><span> path.</span><span style="color:#96b5b4;">len</span><span>() == </span><span style="color:#d08770;">1 </span><span>{
+</span><span>                </span><span style="color:#b48ead;">return </span><span>&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>.root </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            }
+</span><span>
+</span><span>            </span><span style="color:#b48ead;">let mut</span><span> curr = &amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>.root; </span><span style="color:#65737e;">// &amp;mut Node
+</span><span>            </span><span style="color:#65737e;">// advance the iterator once to get past the first null split
+</span><span>            </span><span style="color:#b48ead;">for</span><span> word in path.</span><span style="color:#96b5b4;">split</span><span>(&quot;</span><span style="color:#a3be8c;">/</span><span>&quot;).</span><span style="color:#96b5b4;">skip</span><span>(</span><span style="color:#d08770;">1</span><span>) {
+</span><span>                curr = </span><span style="color:#b48ead;">match</span><span> create {
+</span><span>                    </span><span style="color:#d08770;">true </span><span>=&gt; curr.</span><span style="color:#96b5b4;">create</span><span>(word),
+</span><span>                    </span><span style="color:#d08770;">false </span><span>=&gt; curr.</span><span style="color:#96b5b4;">find</span><span>(word)
+</span><span>                };
+</span><span>            }
+</span><span>            </span><span style="color:#b48ead;">return</span><span> curr
+</span><span>        }
+</span><span>
+</span><span>
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">ls</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String) -&gt; Vec&lt;String&gt; {
+</span><span>        </span><span style="color:#b48ead;">let</span><span> curr = </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">find</span><span>(path.</span><span style="color:#96b5b4;">clone</span><span>(),</span><span style="color:#d08770;">false</span><span>);
+</span><span>        </span><span style="color:#b48ead;">if</span><span> curr.is_file {
+</span><span>            </span><span style="color:#b48ead;">return </span><span>vec![path.</span><span style="color:#96b5b4;">split</span><span>(&quot;</span><span style="color:#a3be8c;">/</span><span>&quot;).</span><span style="color:#96b5b4;">last</span><span>().</span><span style="color:#96b5b4;">unwrap</span><span>().</span><span style="color:#96b5b4;">to_owned</span><span>()]
+</span><span>        }
+</span><span>        </span><span style="color:#b48ead;">let mut</span><span> ans = curr.child.</span><span style="color:#96b5b4;">keys</span><span>().</span><span style="color:#96b5b4;">cloned</span><span>().</span><span style="color:#96b5b4;">collect</span><span>();
+</span><span>        ans.</span><span style="color:#96b5b4;">sort</span><span>();
+</span><span>        ans
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">add_content_to_file</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String, </span><span style="color:#bf616a;">content</span><span>: String) {
+</span><span>        </span><span style="color:#b48ead;">let</span><span> curr = </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">find</span><span>(path,</span><span style="color:#d08770;">true</span><span>);
+</span><span>        curr.is_file = </span><span style="color:#d08770;">true</span><span>;
+</span><span>        curr.content.</span><span style="color:#96b5b4;">push_str</span><span>(&amp;content);
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">mkdir</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String) {
+</span><span>        </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">find</span><span>(path,</span><span style="color:#d08770;">true</span><span>);
+</span><span>    }
+</span><span>
+</span><span>    </span><span style="color:#b48ead;">pub fn </span><span style="color:#8fa1b3;">read_content_from_file</span><span>(&amp;</span><span style="color:#b48ead;">mut </span><span style="color:#bf616a;">self</span><span>, </span><span style="color:#bf616a;">path</span><span>: String) -&gt; String {
+</span><span>        </span><span style="color:#b48ead;">let</span><span> curr = </span><span style="color:#bf616a;">self</span><span>.</span><span style="color:#96b5b4;">find</span><span>(path,</span><span style="color:#d08770;">false</span><span>);
+</span><span>        curr.content.</span><span style="color:#96b5b4;">to_string</span><span>()
+</span><span>    }
+</span><span>}
+</span></code></pre>
+
+        </div>
+
+        
+    </div>
+
+    </div>
+
+    
+    <footer class="footer">
+        <div class="footer__inner">
+                <div class="copyright">
+                        <span>© 
+    2023
+ Powered by <a href="https://www.getzola.org/">Zola</a></span>
+                    <span class="copyright-theme">
+                        <span class="copyright-theme-sep">:: </span>
+                        Theme: <a href="https://github.com/pawroman/zola-theme-terminimal/">Terminimal</a> by pawroman
+                    </span>
+                </div>
+            </div>
+    </footer>
+    
+
+</div>
+</body>
+
+</html>
