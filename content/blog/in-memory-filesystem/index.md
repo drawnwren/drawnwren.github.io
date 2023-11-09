@@ -1,9 +1,10 @@
 +++
 title = "the perils of the in memory filesystem"
 slug = "in-memory-filesystem"
+date = "2023-11-08"
 +++
 
-## Problem Specification
+#### Problem Specification
 
 An extremely common interview question is the "in memory filesystem",
 
@@ -27,7 +28,7 @@ The first thing we notice is that there a few subtleties which make these
 prompts different. We'll explore these subtleties by exploring a python
 solution to the leetcode problem and translating it to rust. 
 
-## Basic Python Implementation
+#### Basic Python Implementation
 
 Generally, interviewers expect you to write something like this in python and
 produce code that looks like the following:
@@ -70,7 +71,7 @@ class FileSystem(object):
         return curr.content
 ```
 
-# Node 
+#### Node 
 
 So, let's suppose we want to do something similar and translate this code into
 Rust.
@@ -124,7 +125,7 @@ This is only a slight change. Now, `child` contains a `HashMap` which contains
 a `Box`. The `Node`s while be stored on the heap, and this change will flow
 through to create a bit more complexity later.
 
-## FileSystem class
+#### FileSystem class
 
 Let's continue to look at the `FileSystem` class.
 
@@ -156,7 +157,7 @@ impl FileSystem {
 
 And this is probably the simplest conversion of the whole post.
 
-### Find 
+##### Find 
 
 ```python
     def find(self,path):#find and return node at path.
@@ -188,7 +189,7 @@ impl FileSystem {
 }
 ```
 
-### Mkdir
+##### Mkdir
 
 Now, let's look at mkdir. The python version relies on the behavior of
 defaultdict to insert unfound paths.
@@ -226,7 +227,7 @@ impl FileSystem {
 
 That makes the rest of the implementation flow fairly straightforwardly, 
 
-## The rest
+#### The rest
 
 ```rust
 impl FileSystem {
@@ -251,7 +252,7 @@ impl FileSystem {
 }
 ```
 
-## Uh-oh
+#### Uh-oh
 
 But wait, now whenever we call `FileSystem::ls(path)` we allocate the memory
 for a directory structure. This makes the following test fail, 
